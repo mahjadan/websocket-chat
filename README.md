@@ -1,7 +1,7 @@
 # Simple Chat App
 using go websocket and Javascript 
 
-###Features:
+### Features:
 - show online users.
 - unique usernames
 - in memory user storage
