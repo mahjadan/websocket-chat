@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"fmt"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
@@ -12,12 +13,12 @@ import (
 //go:embed static
 var fileStatic embed.FS
 
-const port = 8080
+const port = "8080"
 
 var users = make(map[string]*websocket.Conn)
 
 func main() {
-	//mux:= mux.NewRouter()
+	router := mux.NewRouter()
 	upgrader := websocket.Upgrader{
 		HandshakeTimeout: 2 * time.Second,
 		ReadBufferSize:   1024,
@@ -27,16 +28,23 @@ func main() {
 			return true
 		},
 	}
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		handleWS(w, r, upgrader)
 	})
 
-	//mux.Handle("/", http.FileServer(http.FS(fileStatic)))
-	http.Handle("/", http.FileServer(http.Dir("./static")))
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
 
-	fmt.Println("starting server on port", port)
+	addr := "127.0.0.1:" + port
+	fmt.Printf("starting server http://%s\n", addr)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	srv := &http.Server{
+		Handler:      router,
+		Addr:         addr,
+		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  15 * time.Second,
+	}
+
+	log.Fatal(srv.ListenAndServe())
 }
 
 func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrader) {
