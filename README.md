@@ -15,3 +15,9 @@ using go websocket and Javascript
 - docker-compose file
 - Bot, to run commands on in chat 
 
+
+#### To run :
+```bash
+go run main.go
+```
+http://localhost:8080
