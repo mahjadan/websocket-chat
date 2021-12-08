@@ -7,7 +7,7 @@
 </head>
 <div id="snackbar"></div>
 <body>
-<div id="modal" class="modal">
+<div id="join-modal" class="modal">
     <div class="modal-content">
         <h1>Enter a username:</h1>
         <input type="text" id="user_text" placeholder="Nickname">
@@ -15,7 +15,9 @@
     </div>
 </div>
 <div class="container">
+
     <div class="lhs">
+
         <div class="chat-container">
             <div class="chat-inner">
                 <input type="text" id="chat_text" placeholder="Enter your message">
@@ -24,9 +26,14 @@
         </div>
         <div class="messages" id="messages">
         </div>
+        <div class="header">
+            <button id="leave-btn">Leave</button>
+        </div>
     </div>
     <div class="rhs" id="users">
+        <div id="profile"></div>
         <h3>Online Users</h3>
+        <div id="user-list"></div>
     </div>
 </div>
 <script src="/js/script.js"></script>

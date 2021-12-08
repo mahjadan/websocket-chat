@@ -42,12 +42,12 @@ body {
 	width: calc(100% - 300px);
 	display: flex;
 	flex-direction: column-reverse;
-	background-color: #39363F;
+	background-color: #2C394B;
 }
 
 .rhs {
 	width: calc(300px - 24px);
-	background-color: #28272D;
+	background-color: #082032;
 	padding: 12px;
 	color: #eeeeee;
 }
@@ -97,7 +97,7 @@ body {
 	color: #eeeeee;
 	border: none;
 	border-radius: 6px 0 0 6px;
-	background: #28272D;
+	background: #082032;
 }
 
 #chat_text:focus {
@@ -105,7 +105,7 @@ body {
 }
 
 #chat_text::placeholder {
-	color: #908D9B;
+	color: #334756;
 }
 
 #chat_btn {
@@ -113,10 +113,28 @@ body {
 	padding: 0;
 	width: 128px;
 	font-size: 24px;
-	color: #000;
+	color: #082032;
 	border: none;
 	border-radiuS: 0 6px 6px 0;
-	background: #8EFFD6;
+	background: #FF4C29;
+	cursor: pointer;
+}
+.header{
+	height: 64px;
+	width: 100%;
+	margin-top: 20px;
+	margin-left: 20px;
+}
+#leave-btn {
+	height: 48px;
+	padding: 0;
+	width: 96px;
+	font-size: 18px;
+	color: #082032;
+	border: none;
+	border-radiuS: 6px;
+	background: #FF4C29;
+	cursor: pointer;
 }
 
 i {
@@ -135,7 +153,7 @@ i:hover {
 }
 
 .server-message {
-	color: #908D9B;
+	color: #8ddae7;
 	font-style: italic;
 	font-size: 21px;
 }
@@ -148,7 +166,7 @@ i:hover {
 }
 
 .author.self {
-	color: #8EFFD6;
+	color: #FF4C29;
 }
 
 .timestamp {
@@ -180,18 +198,27 @@ i:hover {
 .modal-content {
 	color: #eeeeee;
 	position: relative;
-	background-color: #39363F;
+	background-color: #2C394B;
 	margin: auto;
-	padding: 18px;
-	padding-bottom: 36px;
+	padding: 18px 18px 36px;
 	border-radius: 4px;
-	width: 60%;
+	width: 40%;
 	-webkit-animation-name: animatetop;
 	-webkit-animation-duration: 0.6s;
 }
 
 .modal-content h1 {
 	padding: 18px 0;
+}
+
+.profile{
+	height: 75px;
+	width: 100%;
+	background:gray;
+	font-size: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 #user_text {
@@ -201,7 +228,7 @@ i:hover {
 	color: #eeeeee;
 	border: none;
 	border-radius: 6px;
-	background: #28272D;
+	background: #082032;
 }
 
 #user_text:focus {
@@ -209,7 +236,7 @@ i:hover {
 }
 
 #user_text::placeholder {
-	color: #908D9B;
+	color: #334756;
 }
 
 #user_btn {
@@ -217,10 +244,10 @@ i:hover {
 	padding: 0;
 	width: 96px;
 	font-size: 18px;
-	color: #000;
+	color: #082032;
 	border: none;
 	border-radiuS: 6px;
-	background: #8EFFD6;
+	background: #FF4C29;
 	cursor: pointer;
 }
 @-webkit-keyframes animatetop {

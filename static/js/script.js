@@ -10,8 +10,10 @@ let nickB = document.getElementById("user_btn");
 let chatTxt = document.getElementById("chat_text");
 let chatBtn = document.getElementById("chat_btn");
 
-let registered = false;
-let modal = document.getElementById("modal");
+// leave button
+let leaveBtn = document.getElementById("leave-btn");
+
+let join_modal = document.getElementById("join-modal");
 
 //Gets websocket url by replacing http with ws and https with wss, and appending /websocket to the host
 let protocol = location.protocol == "http:" ? "ws:" : "wss:";
@@ -23,28 +25,53 @@ if (nickname != null) {
 
 let ws = new WebSocket(url);
 
+// on window close close the ws connection, remove localStorage
+window.onbeforeunload = function (){
+	ws.close(1000,"leaving , window closed")
+	window.localStorage.removeItem("websocket-chat-username");
+	return true
+}
+
+
 ws.onopen = function() {
-	modal.style.display = "block";
+	join_modal.style.display = "block";
 	nickI.focus();
 }
+
+ws.onclose = function(e) {
+	console.log("connection closed")
+	console.log(e)
+
+}
+// todo how to hande onClose (to send leave event)
+ws.onmessage = function(info) {
+	let data = JSON.parse(info.data);
+	console.log("new-message")
+	handleMessage(data, info);
+}
+
 // todo handle error if user already exists, should return msg so front can show error message
 function handleMessage(data, info) {
 	switch (data.MessageType) {
-		case "USER_LIST":
-			console.log('inside userlist')
-			console.log(data.Content)
-			document.getElementById("users").innerHTML = ""; //remove old user_list
+		case "ONLINE_USERS":
+			console.log('inside ONLINE_USERS')
 
-			for (let i = 0; i < data.Content.length; i++) { // add the new list
-				userJoin(data.Content[i]);
-			}
+			// rebuilding the online user list.
+			// (race condition here), because when u rebuild the map, someone might leave the room, and try to access the map to delete it
+			// check userLeft() method
+
+
+			setOnlineUsers(data.Content)
 			break;
-		case "JOINED":
-			console.log("insided joined")
-			registered = true;
+
+		case "JOINED":  // this event only comes once, when the user is successfully connected
+			console.log("joined Succesfully , asking for ONLINE_users")
 			window.localStorage.setItem("websocket-chat-username", nickname);
-			modal.style.display = "none";
+			join_modal.style.display = "none";
+			setProfile(data.Username)
 			chatTxt.focus()
+			// ask for online user list
+			sendMessage("","ONLINE_USERS")
 			break;
 
 		case "CHAT":
@@ -55,39 +82,30 @@ function handleMessage(data, info) {
 			toast(data.Content)
 			break;
 
+		case "SOMEONE_LEFT":
+			userLeft(data.Username, data.Date);
+			break;
+
+		case "SOMEONE_JOIN":
+			userJoin(data.Content,new Date())
+			break;
+
 		default:
 			console.log("invalid type")
 			console.log(info.data)
 	}
 }
-
-// todo how to hande onClose (to send leave event)
-ws.onmessage = function(info) {
-	let data = JSON.parse(info.data);
-	console.log("new-message")
-	handleMessage(data, info);
-}
-
 /*
- * Message receive handling
+ * Leaving Chat room
  */
 
-function newMessage(data) {
-	switch(data.type) {
-		case "join":
-			userJoin(data.content, data.date);
-			serverMessage(data.content + " has joined the server", data.date);
-			break;
-		case "leave":
-			userLeave(data.content, data.date);
-			break;
-		case "message":
-			chatMessage(data.sender, data.content, data.date)
-	}
+leaveBtn.onclick = function() {
+	// sendMessage({ Username: nickname ,MessageType : "LEAVE", Date: new Date()})
+	ws.close(1000,"leaving ")
+	location.reload()
 }
 
 function chatMessage(sender, content, date) {
-	console.log(date)
 	let msg = createElm("div", "message");
 
 	aClasses = "author"
@@ -137,13 +155,43 @@ function userJoin(user, date) {
 	p.className = user;
 	p.innerText = user;
 
-	document.getElementById("users").appendChild(p);
+	document.getElementById("user-list").appendChild(p);
+	// write it on the message box
+	serverMessage(user + " has joined the server", date);
 }
 
-function userLeave(user, date) {
-	users = document.getElementById("users");
-	users.removeChild(users.getElementsByClassName(user)[0]);
+function setOnlineUsers(user_list) {
+	// document.getElementById("user-list").innerHTML = ""; //remove old user_list
+	// console.log("running the looooooooop")
+	// console.log(online_users_list.size)
+	// online_users_list.forEach((value, key) => {
+	for (let i = 0; i < user_list.length; i++) {
+
+
+		if (user_list[i] === nickname) {
+			return
+		}
+		let p = document.createElement("p");
+		p.className = user_list[i];
+		p.innerText = user_list[i];
+		console.log(p)
+		document.getElementById("user-list").appendChild(p);
+	}
+	// })
+}
+
+function userLeft(user, date) {
+	let userList = document.getElementById("user-list");
+	userList.removeChild(userList.getElementsByClassName(user)[0]);
 	serverMessage(user + " has left the server", date);
+}
+
+function setProfile(user) {
+	let p = document.createElement("div");
+	p.className = 'profile';
+	p.innerText = user;
+
+	document.getElementById("profile").appendChild(p);
 }
 
 /*
@@ -156,7 +204,7 @@ function register() {
 	if (nick.trim().length == 0) return;
 	nickname = nick;
 
-	sendMessage({Date: new Date(), Username: nick, MessageType : "JOIN"})
+	sendMessage("", "JOIN")
 }
 
 nickI.onkeydown = function(ev) {
@@ -181,15 +229,16 @@ chatTxt.onkeydown = function(ev) {
 	}
 	if(chatTxt.value.trim().length == 0) return;
 
-	// ws.send(chatTxt.value);
-	sendMessage({Content: chatTxt.value, Username: nickname ,MessageType: "CHAT"})
+	sendMessage( chatTxt.value, "CHAT")
 	chatTxt.value = "";
+	chatTxt.focus()
 }
 chatBtn.onclick = function() {
 	if(chatTxt.value.trim().length == 0) return;
 
-	sendMessage({Content: chatTxt.value, Username: nickname ,MessageType: "CHAT"})
+	sendMessage(chatTxt.value,"CHAT")
 	chatTxt.value = "";
+	chatTxt.focus()
 }
 
 /*
@@ -210,8 +259,6 @@ function dateToString(date) {
 	let day = date.getDate();
 	let hour = date.getHours();
 	let minute = date.getMinutes();
-	console.log(date)
-	console.log(` ${day} ${month} ${year} at ${hour}:${minute}`)
 	return ` ${day} ${month} ${year} at ${hour}:${minute}`;
 }
 
@@ -221,6 +268,7 @@ function createElm(name, classes) {
 	return x;
 }
 
-function sendMessage(msg){
+function sendMessage(content,msgType){
+	let msg = {Content: content, Username: nickname ,MessageType: msgType, Date: new Date()}
 	ws.send(JSON.stringify(msg))
 }

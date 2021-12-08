@@ -45,6 +45,7 @@ func main() {
 	}
 
 	log.Fatal(srv.ListenAndServe())
+
 }
 
 func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrader) {
@@ -56,6 +57,7 @@ func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrade
 	}
 	fmt.Println("new connection ........remoteAddress: ", conn.RemoteAddr())
 
+	var username string
 	defer conn.Close()
 
 	for {
@@ -63,13 +65,34 @@ func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrade
 		var message Message
 		err = conn.ReadJSON(&message)
 		if err != nil {
-			log.Println("Error reading message, err: ", err)
+			log.Printf("Error reading message, disconnecting user: %s err: %v\n", username, err)
+			if username != "" {
+				//delete the user from db
+				delete(users, username)
+
+				notifyUserLeft(Message{
+					Content:     nil,
+					Username:    username,
+					MessageType: SomeoneLeft,
+					Date:        time.Now(),
+				})
+			}
 			return
 		}
+		username = message.Username
 
 		switch message.MessageType {
+		case Ping:
+			fmt.Println("Ping - Pong")
+			conn.WriteJSON(Message{
+				MessageType: "PONG",
+			})
+			break
 
 		case Join:
+			// we send two events,
+			//- joined - for setting up the profile and cookies/localStorage on the front, and
+			// - Online_users - to update the online user panel.
 			fmt.Println("joining.....", message.Username)
 			if _, ok := users[message.Username]; ok {
 				// handle already registered
@@ -88,11 +111,27 @@ func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrade
 				log.Println("Error writing message, err: ", err)
 				return
 			}
-			// update online user_list
-			sendUserList()
+			// you can not just send the newly joined user, you have to send all online users, because
+			// if only send newly joined user, the new user will not be able to see the users who have joined before him.
+			// this sends all the online users ( front has to filter to not include himself)
+			//sendOnlineUserList()// THIS step should be requested by the user after joining
+			//todo notify others that someone has joined
+			notifySomeOneHasJoined(message.Username)
 			break
-
+		case OnlineUsers:
+			msg := Message{
+				MessageType: OnlineUsers,
+				Content:     getUserList(),
+			}
+			conn := users[message.Username]
+			conn.WriteJSON(msg)
+			fmt.Printf("sending online users to %s, %v\n", message.Username, getUserList())
+			//sendOnlineUserList()
+			break
 		case Leave:
+			if _, ok := users[message.Username]; ok {
+				notifyUserLeft(message)
+			}
 			break
 
 		case Chat:
@@ -110,31 +149,37 @@ func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrade
 
 }
 
+func notifyUserLeft(message Message) {
+	message.MessageType = SomeoneLeft
+	broadcast(message)
+}
+
 func broadcast(message Message) {
-	for _, conn := range users {
+	for user, conn := range users {
+		fmt.Println("notifying user: ", user)
 		conn.WriteJSON(message)
 	}
 
 }
 
 func getUserList() []string {
-	var userlist []string
-	for k, _ := range users {
-		userlist = append(userlist, k)
+	var userList []string
+	for username, _ := range users {
+		userList = append(userList, username)
 	}
-	return userlist
+	return userList
 }
 
-func sendUserList() {
-	for _, conn := range users {
-		msg := Message{
-			Content:     getUserList(),
-			Username:    "",
-			MessageType: UserList,
-		}
-		conn.WriteJSON(msg)
+func notifySomeOneHasJoined(newUser string) {
+	msg := Message{
+		MessageType: SomeoneJoin,
+		Content:     newUser,
 	}
-
+	for usr, conn := range users {
+		if usr != newUser {
+			conn.WriteJSON(msg)
+		}
+	}
 }
 
 //func handleHome(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +204,10 @@ const (
 	Join          MsgType = "JOIN"
 	Joined        MsgType = "JOINED"
 	Leave         MsgType = "LEAVE"
+	SomeoneLeft   MsgType = "SOMEONE_LEFT"
 	Chat          MsgType = "CHAT"
-	UserList      MsgType = "USER_LIST"
+	OnlineUsers   MsgType = "ONLINE_USERS"
 	AlreadyExists         = "ALREADY_EXISTS"
+	SomeoneJoin           = "SOMEONE_JOIN"
+	Ping                  = "PING"
 )
