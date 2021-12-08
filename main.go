@@ -1,7 +1,7 @@
 package main
 
 import (
-	"embed"
+	"encoding/csv"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -10,14 +10,17 @@ import (
 	"time"
 )
 
-//go:embed static
-var fileStatic embed.FS
-
 const port = "8080"
 
 var users = make(map[string]*websocket.Conn)
+var botCh = make(chan Message, 1)
 
 func main() {
+	// listening command event from chat
+	go func(ch chan Message) {
+		startStockChatBot(ch)
+	}(botCh)
+	defer close(botCh)
 	router := mux.NewRouter()
 	upgrader := websocket.Upgrader{
 		HandshakeTimeout: 2 * time.Second,
@@ -82,17 +85,15 @@ func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrade
 		username = message.Username
 
 		switch message.MessageType {
-		case Ping:
-			fmt.Println("Ping - Pong")
-			conn.WriteJSON(Message{
-				MessageType: "PONG",
-			})
+		// if someone is sending command, we notify the chatBot
+		case Command:
+			botCh <- message
 			break
 
 		case Join:
 			// we send two events,
 			//- joined - for setting up the profile and cookies/localStorage on the front, and
-			// - Online_users - to update the online user panel.
+			// - someoneJoined - to update the online user panel.
 			fmt.Println("joining.....", message.Username)
 			if _, ok := users[message.Username]; ok {
 				// handle already registered
@@ -103,21 +104,17 @@ func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrade
 				break
 			}
 			users[message.Username] = conn
-			// how to identify its response of registration? its the only msg that server send to client or NOT?
-			message.MessageType = Joined
 
+			message.MessageType = Joined
 			err = conn.WriteJSON(message)
 			if err != nil {
 				log.Println("Error writing message, err: ", err)
 				return
 			}
-			// you can not just send the newly joined user, you have to send all online users, because
-			// if only send newly joined user, the new user will not be able to see the users who have joined before him.
-			// this sends all the online users ( front has to filter to not include himself)
-			//sendOnlineUserList()// THIS step should be requested by the user after joining
-			//todo notify others that someone has joined
+			// we only send the newly joined users to update online-user-panel
 			notifySomeOneHasJoined(message.Username)
 			break
+			// after the user joined, the front will ask for online-users, and we send the whole list.
 		case OnlineUsers:
 			msg := Message{
 				MessageType: OnlineUsers,
@@ -126,8 +123,8 @@ func handleWS(w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrade
 			conn := users[message.Username]
 			conn.WriteJSON(msg)
 			fmt.Printf("sending online users to %s, %v\n", message.Username, getUserList())
-			//sendOnlineUserList()
 			break
+
 		case Leave:
 			if _, ok := users[message.Username]; ok {
 				notifyUserLeft(message)
@@ -182,16 +179,6 @@ func notifySomeOneHasJoined(newUser string) {
 	}
 }
 
-//func handleHome(w http.ResponseWriter, r *http.Request) {
-//	if r.URL.Path != "/" {
-//		w.WriteHeader(http.StatusNotFound)
-//		w.Write([]byte("NOT FOUND"))
-//		return
-//	}
-//	t := template.Must(template.ParseFS(filesTempl, "template/template.html", "template/navbar.html", "template/home.html"))
-//	t.ExecuteTemplate(w, "layout", map[string]string{"Page": "home"})
-//}
-
 type Message struct {
 	Content     interface{}
 	Username    string
@@ -209,5 +196,41 @@ const (
 	OnlineUsers   MsgType = "ONLINE_USERS"
 	AlreadyExists         = "ALREADY_EXISTS"
 	SomeoneJoin           = "SOMEONE_JOIN"
-	Ping                  = "PING"
+	Command               = "COMMAND"
 )
+
+// example command send from front is '/stock=aapl.us'
+func startStockChatBot(ch chan Message) {
+	select {
+	case msg := <-ch:
+		fmt.Println("[BOT], receive MSG: ", msg)
+		result := msg.Content.([]interface{})
+		fmt.Println("result: ", result)
+		response, err := http.Get(fmt.Sprintf("https://stooq.com/q/l/?s=%s&f=sd2t2ohlcv&h&e=csv", result[1]))
+		if err != nil {
+			// ignoring errors
+			fmt.Println("error on GET:", err)
+			return
+		}
+		defer response.Body.Close()
+
+		reader := csv.NewReader(response.Body)
+		all, err := reader.ReadAll()
+		if err != nil {
+			fmt.Println("error on reading body, err:", err)
+			return
+		}
+		if len(all) >= 2 {
+			stockName := all[1][0]
+			stockPrice := all[1][3]
+			reply := fmt.Sprintf("%s quote is $%s per share", stockName, stockPrice)
+			fmt.Println(reply)
+			broadcast(Message{
+				Content:     reply,
+				Username:    "Stock-BOT",
+				MessageType: Chat,
+				Date:        time.Now(),
+			})
+		}
+	}
+}

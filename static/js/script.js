@@ -23,6 +23,9 @@ if (nickname != null) {
 	nickI.value = nickname;
 }
 
+let cmdKeyword = "/stock";
+let separator = "="
+
 let ws = new WebSocket(url);
 
 // on window close close the ws connection, remove localStorage
@@ -47,11 +50,11 @@ ws.onclose = function(e) {
 ws.onmessage = function(info) {
 	let data = JSON.parse(info.data);
 	console.log("new-message")
-	handleMessage(data, info);
+	handleServerEvent(data, info);
 }
 
 // todo handle error if user already exists, should return msg so front can show error message
-function handleMessage(data, info) {
+function handleServerEvent(data, info) {
 	switch (data.MessageType) {
 		case "ONLINE_USERS":
 			console.log('inside ONLINE_USERS')
@@ -59,7 +62,6 @@ function handleMessage(data, info) {
 			// rebuilding the online user list.
 			// (race condition here), because when u rebuild the map, someone might leave the room, and try to access the map to delete it
 			// check userLeft() method
-
 
 			setOnlineUsers(data.Content)
 			break;
@@ -223,13 +225,24 @@ nickB.onclick = function() {
  * Message sending
  */
 
+function handleTextMessage(msg, cmdKeyword, separator) {
+	if (msg.startsWith(cmdKeyword)) {
+		let result = msg.split(separator)
+		if (result.length > 1) {
+			sendMessage(result, "COMMAND")
+		}
+	}
+	sendMessage(msg, "CHAT")
+}
+
 chatTxt.onkeydown = function(ev) {
 	if(ev.key !== "Enter") {
 		return;
 	}
-	if(chatTxt.value.trim().length == 0) return;
+	let msg = chatTxt.value.trim();
+	if(msg.length == 0) return;
 
-	sendMessage( chatTxt.value, "CHAT")
+	handleTextMessage(msg, cmdKeyword, separator);
 	chatTxt.value = "";
 	chatTxt.focus()
 }
