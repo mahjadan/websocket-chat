@@ -21,3 +21,6 @@ using go websocket and Javascript
 go run main.go
 ```
 http://localhost:8080
+
+#### Stock Bot
+send /stock=aapl.us to test stock-chat-bot
